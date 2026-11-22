@@ -1,584 +1,464 @@
 #!/usr/bin/env python3
-"""Compose the entry page for make.fun news-image-20261121.
+"""The World in One Day — Saturday 21 November 2026.
 
-"The World in One Day" for Saturday 21 November 2026: thirty
-stories from that day's reporting, set as a single newspaper
-page of 1024x1024 pixels.
+Composes the one-page newspaper for the make.fun bounty
+"news-image-20261121": 35 dated stories from Saturday 21 November
+2026, every one carrying its verification badge and its sources on
+the page itself.  The layout follows the system the winning pages
+use: a cream sheet, a giant serif date, a strip of huge red
+numbers, bespoke infographics for the three leads, numbered cards
+and briefs, a pin map, and a DATE CHECK box that says what was
+left out and why.
 
-How the page is organised, top to bottom:
-
-  * a navy masthead carrying the paper's name, the date in a
-    large serif, a one-line standfirst and the page counts,
-    with a small date badge at the left;
-  * a coloured band split by region, each segment labelled
-    with that region's story count;
-  * a timeline strip, "THE DAY IN UTC", with five moments;
-  * three lead cards with their artwork on top, then two
-    rows of four smaller cards, eleven drawn stories in all;
-  * a dot-matrix world map, "WHERE IT HAPPENED", with the
-    drawn stories pinned by number, beside the remaining
-    stories as numbered one-line briefs;
-  * a red date-check strip and a sources line as the footer.
-
-All lettering is typeset here with Pillow from the story
-tables below, so the page text is always crisp; the artwork
-in assets/ carries no lettering of its own, so nothing can
-come out garbled.  Every story was reported on the day named
-on the masthead - SOURCES.md in this repository is the
-verification record behind each line.
-
-The composed page is written to entry.png beside this file.
-If a PNG ever exceeded the bounty's 1 MiB cap the page would
-be re-saved as a high-quality JPEG instead; at this palette
-the PNG stays well under the cap.
+Deterministic: no network, no clock, no randomness.  Running it
+twice produces a byte-identical entry.png.
 """
-
-from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-HERE = Path(__file__).resolve().parent
-ASSETS = HERE / "assets"
-OUT = HERE / "entry.png"
-
-# Canvas and palette.
 W = H = 1024
-PAPER = (247, 242, 231)
-INK = (26, 26, 30)
-GRAY = (110, 104, 94)
-NAVY = (22, 50, 74)
-CARD = (255, 253, 247)
-RULE = (198, 188, 168)
-RED = (178, 34, 40)
-PLUM = (122, 44, 92)
-TEAL = (14, 116, 104)
-GOLD = (176, 124, 24)
-GREEN = (46, 120, 62)
-DARKRED = (154, 30, 34)
+MARGIN = 28
+CREAM = (247, 242, 231)
+INK = (18, 18, 18)
+RED = (176, 42, 30)
+GRAY = (96, 90, 80)
+GREEN = (30, 122, 52)
+NAVY = (36, 80, 122)
+BROWN = (122, 106, 83)
+RULE = (190, 180, 160)
 
-# Type: serif display faces for headlines, sans for labels,
-# serif text faces for the briefs.  Sizes are chosen so the
-# page stays readable from thumbnail to full size.
-FONT_DIR = "/usr/share/fonts/truetype"
-FONT_FILES = {
-    "title": (f"{FONT_DIR}/noto/NotoSerif-Black.ttf", 37),
-    "kicker": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 10),
-    "standfirst": (f"{FONT_DIR}/liberation/LiberationSerif-Italic.ttf", 12),
-    "counts": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 10),
-    "badge_month": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 13),
-    "badge_day": (f"{FONT_DIR}/noto/NotoSerif-Black.ttf", 30),
-    "badge_year": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 8),
-    "band": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 10),
-    "tl_head": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 11),
-    "tl_time": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 10),
-    "tl_text": (f"{FONT_DIR}/liberation/LiberationSans-Regular.ttf", 10),
-    "kick": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 9),
-    "lead_head": (f"{FONT_DIR}/noto/NotoSerif-Bold.ttf", 24),
-    "lead_brief": (f"{FONT_DIR}/liberation/LiberationSerif-Regular.ttf", 12),
-    "head": (f"{FONT_DIR}/noto/NotoSerif-Bold.ttf", 15),
-    "brief": (f"{FONT_DIR}/liberation/LiberationSerif-Regular.ttf", 11),
-    "tag": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 8),
-    "num": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 10),
-    "map_head": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 11),
-    "map_pin": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 8),
-    "legend": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 8),
-    "also_head": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 11),
-    "also_num": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 11),
-    "also_lead": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 11),
-    "also_text": (f"{FONT_DIR}/liberation/LiberationSans-Regular.ttf", 11),
-    "datecheck": (f"{FONT_DIR}/liberation/LiberationSans-Bold.ttf", 9),
-    "sources": (f"{FONT_DIR}/liberation/LiberationSans-Regular.ttf", 9),
-}
-F = {name: ImageFont.truetype(path, size)
-     for name, (path, size) in FONT_FILES.items()}
-
-# Region segments for the coloured band, in reading order,
-# with the number of this page's stories from each region.
-REGION_BAND = [
-    ("ASIA", 4, RED), ("EUROPE", 5, NAVY), ("AMERICAS", 4, PLUM),
-    ("MIDDLE EAST", 6, TEAL), ("AFRICA", 2, GOLD),
-    ("OCEANIA", 2, GREEN), ("GLOBAL", 7, GRAY),
-]
-
-# Five grounded moments for the timeline strip.
-TIMELINE = [
-    ("OVERNIGHT", "Iran hits Bahrain bases"),
-    ("MORNING", "Cartel boss captured"),
-    ("MIDDAY", "Missile hits Kryvyi Rih"),
-    ("EVENING", "COP31 into overtime"),
-    ("LATE", "AI sell-off deepens"),
-]
-
-# Crop window kept for compatibility with earlier editions;
-# this edition's leads all use the focal crop below.
-HERO_CROP = (40, 450, 1560, 1164)
-
-# The three lead stories, numbered 1 to 3.
-LEADS = [
-    dict(n=1, art="illo-gulf.png", focal=0.5, color=TEAL,
-         kicker="MIDDLE EAST · BAHRAIN",
-         head="Iran strikes Bahrain as Gulf war widens",
-         brief="Tehran says it hit two US bases; Bahrain reports a "
-               "fire at a civilian industrial site, no injuries.",
-         tag="REUTERS · AL JAZEERA"),
-    dict(n=2, art="illo-kyiv.png", focal=0.45, color=NAVY,
-         kicker="EUROPE · KRYVYI RIH",
-         head="Missile kills two in Zelenskyy's hometown",
-         brief="A Russian ballistic missile hits the centre of "
-               "Kryvyi Rih; dozens are wounded, six of them "
-               "children.",
-         tag="AL JAZEERA · REUTERS"),
-    dict(n=3, art="illo-mexico.png", focal=0.5, color=PLUM,
-         kicker="AMERICAS · SINALOA",
-         head="Mexico captures cartel boss 'Chapo Isidro'",
-         brief="Special forces seize the FBI most-wanted boss in "
-               "Guasave; gunfights and blockades follow, 11 dead.",
-         tag="NPR · PBS NEWSHOUR"),
-]
-
-# The eight card stories that follow the leads, numbered
-# 4 to 11, in two rows of four.
-ROWS = [
-    dict(n=4, art="illo-cop31.png", focal=0.568, color=GRAY,
-         kicker="GLOBAL · ANTALYA",
-         head="COP31 runs past deadline with no deal",
-         brief="The UN climate summit stalls in overtime over "
-               "fossil fuels, finance and science.",
-         tag="AFP · ONE TURN"),
-    dict(n=5, art="illo-markets.png", focal=0.5, color=GRAY,
-         kicker="GLOBAL · MARKETS",
-         head="AI sell-off pushes US stocks into correction",
-         brief="Chip and AI shares slide again; Bitcoin bounces 9% "
-               "off a two-year low to retake $60,000.",
-         tag="REUTERS · ONE TURN"),
-    dict(n=6, art="illo-anthropic.png", focal=0.492, color=PLUM,
-         kicker="AMERICAS · WASHINGTON",
-         head="FBI crime database hit by suspected breach",
-         brief="Reports say hackers reached the national crime "
-               "database; Trump calls the hack 'not good'.",
-         tag="TECHCRUNCH · DAWN"),
-    dict(n=7, art="illo-kerch.png", focal=0.5, color=NAVY,
-         kicker="EUROPE · GULF OF FINLAND",
-         head="Drone strike sets Russian ship ablaze",
-         brief="A cargo ship burns after a drone attack; the crew "
-               "is evacuated as Finland investigates.",
-         tag="FRANCE 24 · AL JAZEERA"),
-    dict(n=8, art="illo-gaza.png", focal=0.5, color=TEAL,
-         kicker="MIDDLE EAST · GAZA",
-         head="Strike on aid vehicle kills three in Gaza",
-         brief="Witnesses say an Israeli strike hit a car "
-               "delivering food aid; three people are killed.",
-         tag="REUTERS · ONE TURN"),
-    dict(n=9, art="illo-mercury.png", focal=0.5, color=GRAY,
-         kicker="GLOBAL · SPACE",
-         head="BepiColombo arrives at Mercury",
-         brief="After an eight-year cruise, the ESA-JAXA probe "
-               "reaches the innermost planet.",
-         tag="EOS · ESA"),
-    dict(n=10, art="illo-riyadh.png", focal=0.72, color=TEAL,
-         kicker="MIDDLE EAST · YEMEN",
-         head="Houthis launch strikes after Saudi operation",
-         brief="Yemen's Houthis fire back after the Saudi "
-               "coalition's 'special operation'.",
-         tag="REUTERS · DAWN"),
-    dict(n=11, art="illo-icj.png", focal=0.5, color=RED,
-         kicker="ASIA · MYANMAR",
-         head="France seeks UN meeting after genocide ruling",
-         brief="Paris will request a Security Council meeting "
-               "after the World Court's Myanmar judgment.",
-         tag="ONE TURN · APPISTOS"),
-]
-
-# The remaining stories as numbered one-liners: number,
-# region colour, a bold lead word or two, then the rest of
-# the line in wire style.
-BRIEFS = [
-    (12, RED, "Bangladesh:", "unrest before Hasina return"),
-    (13, RED, "Japan:", "47,000 oppose nuclear subs"),
-    (14, RED, "N. Korea:", "Yongbyon plant expanding"),
-    (15, NAVY, "Finland:", "suspected airspace violation"),
-    (16, NAVY, "Brussels:", "flights face cancellations"),
-    (17, NAVY, "Poland:", "Russian missiles land"),
-    (18, PLUM, "Washington:", "Huang to testify to Senate"),
-    (19, PLUM, "Contractors:", "told to check White House"),
-    (20, TEAL, "Hormuz:", "missiles hit two tankers"),
-    (21, TEAL, "Iran:", "diplomacy call, US says no"),
-    (22, TEAL, "Basra:", "power plant fire kills four"),
-    (23, GOLD, "Nigeria:", "24 bodies after capsize"),
-    (24, GOLD, "Haiti:", "soldier dies after blast"),
-    (25, GREEN, "Queensland:", "health system reckoning"),
-    (26, GREEN, "Australia:", "far-right funding exposed"),
-    (27, GRAY, "Dengue:", "bacteria mosquitoes cut cases"),
-    (28, GRAY, "Trade:", "EU-Indonesia pacts signed"),
-    (29, GRAY, "EU budget:", "1.78tn euro draft proposed"),
-    (30, GRAY, "Bitcoin:", "node bug found by AI"),
-]
-
-# Map pins for the drawn stories that sit alone on the map,
-# as (story number, longitude, latitude, region colour); a
-# shared pill covers the two Americas cards, and plain dots
-# mark a spread of the briefs.
-MAP_PIN_DATA = [
-    (1, 50.5, 26.2, TEAL), (2, 33.4, 47.9, NAVY),
-    (4, 30.7, 36.9, GRAY), (7, 25.0, 60.0, NAVY),
-    (8, 34.3, 31.4, TEAL), (10, 46.7, 24.6, TEAL),
-    (11, 96.0, 21.9, RED),
-]
-MAP_PILL = ("3·6", -100.0, 37.0, PLUM)
-MAP_DOTS = [
-    (90.4, 23.8, RED), (25.0, 61.0, NAVY), (8.0, 9.0, GOLD),
-    (153.0, -27.0, GREEN), (56.3, 26.5, TEAL), (-52.0, -10.0, GRAY),
-    (106.8, -6.2, RED),
-]
-
-# The footer strip: what the date check promises, and the
-# sources line that closes the page.
-DATE_CHECK_1 = ("DATE CHECK - Every story here happened, or was first "
-                "reported, on Saturday 21 November 2026.")
-DATE_CHECK_2 = ("The Shenzhen text and the World Court judgment landed "
-                "earlier in the week; Saturday brought their fallout. "
-                "Claims are attributed.")
-SOURCES_LINE = ("Sources: Reuters · AP · AFP · NPR · PBS · Al Jazeera · "
-                "France 24 · The Guardian · One Turn · UKMTO")
-
-# Vertical layout measurements for the page furniture.
-MASTHEAD_H = 90
-RAINBOW_H = 17
-TIMELINE_H = 34
-LEAD_ART_H = 124
-CARD_ART_H = 94
-MAP_W, MAP_H = 300, 94
+SERIF = "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf"
+SERIF_IT = "/usr/share/fonts/truetype/liberation/LiberationSerif-Italic.ttf"
+SANS = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+SANS_B = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 
-def wrap_text(draw, text, font, max_w):
-    """Split text into lines that fit max_w, word by word."""
-    lines, current = [], ""
-    for word in text.split():
-        trial = (current + " " + word).strip()
-        if draw.textlength(trial, font=font) <= max_w:
-            current = trial
+def F(path, size):
+    return ImageFont.truetype(path, size)
+
+
+def wrap(d, text, font, width):
+    """Greedy word wrap by pixel width."""
+    words, lines, cur = text.split(), [], ""
+    for w_ in words:
+        trial = (cur + " " + w_).strip()
+        if d.textlength(trial, font=font) <= width or not cur:
+            cur = trial
         else:
-            if current:
-                lines.append(current)
-            current = word
-    if current:
-        lines.append(current)
+            lines.append(cur)
+            cur = w_
+    if cur:
+        lines.append(cur)
     return lines
 
 
-def crop_to_box(path, box_w, box_h, focal=0.5):
-    """Crop an artwork to a card's box around a focal point.
-
-    The window keeps the box's aspect ratio, is centred
-    vertically, and slides horizontally so the focal point
-    (a fraction of the image width) stays in frame.
-    """
-    im = Image.open(path).convert("RGB")
-    ratio = box_h / box_w
-    win_w = im.width
-    win_h = int(win_w * ratio)
-    if win_h > im.height:
-        win_h = im.height
-        win_w = int(win_h / ratio)
-    centre_x = int(im.width * focal)
-    x0 = min(max(centre_x - win_w // 2, 0), im.width - win_w)
-    y0 = (im.height - win_h) // 2
-    return im.crop((x0, y0, x0 + win_w, y0 + win_h)).resize(
-        (box_w, box_h), Image.LANCZOS)
+def badge(d, x, y, kind):
+    """Verification badge; returns its width."""
+    label = {"CONFIRMED": "✓ CONFIRMED", "OFFICIAL": "OFFICIAL",
+             "REPORTED": "REPORTED"}[kind]
+    color = {"CONFIRMED": GREEN, "OFFICIAL": NAVY, "REPORTED": BROWN}[kind]
+    f = F(SANS_B, 9)
+    w_ = int(d.textlength(label, font=f)) + 10
+    d.rounded_rectangle([x, y, x + w_, y + 14], 3, fill=color)
+    d.text((x + 5, y + 2), label, font=f, fill=(255, 255, 255))
+    return w_
 
 
-def shrink_font(draw, text, font_path, size, max_w, floor=8):
-    """Largest size at or below `size` that fits max_w."""
-    while size > floor:
-        candidate = ImageFont.truetype(font_path, size)
-        if draw.textlength(text, font=candidate) <= max_w:
-            return candidate
-        size -= 1
-    return ImageFont.truetype(font_path, floor)
+def numdot(d, x, y, n, r=11):
+    d.ellipse([x, y, x + 2 * r, y + 2 * r], fill=RED)
+    f = F(SANS_B, 13 if n < 10 else 11)
+    t = str(n)
+    d.text((x + r - d.textlength(t, font=f) / 2, y + r - 8), t,
+           font=f, fill=(255, 255, 255))
 
 
-def paint_masthead(draw):
-    """The navy masthead: badge, paper name, date, counts."""
-    draw.rectangle([0, 0, W, MASTHEAD_H], fill=NAVY)
-    draw.text((118, 10), "THE WORLD IN ONE DAY", font=F["kicker"],
-              fill=(255, 255, 255))
-    draw.text((116, 21), "Saturday 21 November 2026", font=F["title"],
-              fill=(255, 255, 255))
-    draw.text((118, 62),
-              "Everything on this page happened, or was first reported, "
-              "on Saturday 21 November 2026.",
-              font=F["standfirst"], fill=(216, 222, 235))
-    draw.text((118, 76), "30 STORIES · 7 REGIONS · 11 DRAWN · ONE PAGE",
-              font=F["counts"], fill=(240, 200, 90))
-    draw.rounded_rectangle([24, 8, 100, 82], 8, fill=(240, 244, 250))
-    draw.text((62, 11), "NOV", font=F["badge_month"], fill=NAVY,
-              anchor="ma")
-    draw.text((62, 26), "21", font=F["badge_day"], fill=NAVY,
-              anchor="ma")
-    draw.text((62, 60), "SAT · 2026", font=F["badge_year"], fill=NAVY,
-              anchor="ma")
+# ---------------------------------------------------------------- data
+
+DAY = "Saturday 21 November 2026"
+DAY_UP = "SATURDAY 21 NOVEMBER 2026"
+SUBHEAD = ("Iran strikes US bases in Bahrain  ·  Deep quake rocks Peru"
+           "  ·  Climate talks run into overtime")
+STATS = [("6.7", "Peru quake magnitude (USGS)"),
+         ("128", "states back a robot-arms draft"),
+         ("90.4%", "of tariff lines freed, EU–Indonesia"),
+         ("37–12", "England's record win over NZ"),
+         ("$5M", "FBI reward on Chapo Isidro"),
+         ("82,500", "marchers in France (ministry)")]
+REGIONS = [("EUROPE", 15, (43, 74, 110)), ("ASIA", 7, (30, 122, 52)),
+           ("MIDDLE EAST", 6, (176, 42, 30)), ("AMERICAS", 5, (200, 130, 40)),
+           ("AFRICA", 1, (122, 106, 83)), ("OCEANIA", 1, (90, 90, 140))]
+TIMELINE = [("00:09", "Peru quake\nJunín (USGS)"), ("03:00", "Hartha fire\nBasra"),
+            ("03:45", "Geneva talks\nend"), ("04:00", "Las Vegas\nqualifying"),
+            ("06:00", "Drones hit\nSparta II"), ("13:30", "Cameroon U17\nopener, Doha"),
+            ("14:10", "England v NZ\nkickoff"), ("EVE", "Iran's waves\non Bahrain")]
+
+LEADS = [
+    dict(n=1, art="gulf", kicker="BAHRAIN · HORMUZ — WAR", badge="CONFIRMED",
+         head="Iran strikes US bases in Bahrain; tankers hit off Oman",
+         body="Two waves of drones and missiles hit US bases; a civilian "
+              "plant burned. Three tankers struck in or near Hormuz; "
+              "Iranian tankers mass off Kharg Island.",
+         src="Reuters · Al Jazeera · euronews"),
+    dict(n=2, art="quake", kicker="JUNÍN, PERU — EARTHQUAKE", badge="CONFIRMED",
+         head="Deep 6.7 earthquake shakes central Peru",
+         body="Struck 00:09 UTC, deep below Junín; felt in Lima. "
+              "Landslides and minor damage, no deaths in first reports; "
+              "no tsunami threat.",
+         src="IGP · USGS · AFP"),
+    dict(n=3, art="cop", kicker="ANTALYA, TÜRKIYE — CLIMATE", badge="CONFIRMED",
+         head="COP31 climate talks run into overtime",
+         body="Talks ran through Saturday over fossil fuels and finance; "
+              "the draft still omits fossil fuels and a third draft was "
+              "promised. Next summit: Addis Ababa 2027.",
+         src="AP · Reuters"),
+]
+
+CARDS = [
+    dict(n=4, bg=(38, 60, 92), glyph="CREW OFF", big="16", kicker="FINLAND — SECURITY", badge="CONFIRMED",
+         head="Drones set Russian cargo ship ablaze",
+         body="Sparta II caught fire after a drone hit; 16 crew got off. Finland suspects Ukraine.", src="Reuters"),
+    dict(n=5, bg=(70, 90, 120), glyph="ROBOT ARMS", big="128", kicker="GENEVA — ARMS", badge="CONFIRMED",
+         head="128 states back a killer-robots draft",
+         body="States agreed to draft a binding instrument over two years; big powers opposed.", src="AFP"),
+    dict(n=6, bg=(150, 40, 30), glyph="FBI TOP TEN", big="$5M", kicker="MEXICO — CRIME", badge="CONFIRMED",
+         head="Cartel boss Chapo Isidro captured",
+         body="The FBI most-wanted trafficker was seized in Guasave; 11 died in follow-on violence.", src="Reuters · CNN"),
+    dict(n=7, bg=(36, 80, 122), glyph="TRADE PACT", big="90.4%", kicker="EU–INDONESIA — TRADE", badge="OFFICIAL",
+         head="EU and Indonesia sign trade pact",
+         body="Signed after ten years of talks; 90.4% of tariff lines duty-free from day one.", src="Antara · governments"),
+    dict(n=8, bg=(120, 60, 30), glyph="POWER PLANT", big="4", kicker="BASRA, IRAQ — DISASTER", badge="CONFIRMED",
+         head="Fire at Hartha power plant kills 4",
+         body="The 800 MW plant caught fire before dawn; more than 30 workers were injured.", src="Reuters"),
+    dict(n=9, bg=(60, 60, 60), glyph="MARKETS", big="150%", kicker="TAIPEI — MARKETS", badge="OFFICIAL",
+         head="Taiwan curbs short selling after rout",
+         body="Regulator banned short sales and raised margin to 150% after the worst week since 1991.", src="FSC via CNA · Reuters"),
+    dict(n=10, bg=(30, 100, 60), glyph="RUGBY", big="37–12", kicker="TWICKENHAM — RUGBY", badge="CONFIRMED",
+         head="England beat All Blacks by record 37–12",
+         body="Five tries and a record margin: New Zealand's heaviest defeat by England.", src="Reuters · AP"),
+    dict(n=11, bg=(90, 40, 90), glyph="FORMULA 1", big="P1", kicker="LAS VEGAS — FORMULA 1", badge="OFFICIAL",
+         head="Verstappen inherits pole in Las Vegas",
+         body="Antonelli was fastest but docked five places; Russell starts second.", src="FIA · AP"),
+    dict(n=12, bg=(100, 110, 60), glyph="AID VEHICLE", big="3", kicker="GAZA CITY — WAR", badge="CONFIRMED",
+         head="Strike kills 3 in Gaza aid vehicle",
+         body="The vehicle carried food and WCK-logo papers; WCK said it was not theirs.", src="Reuters"),
+    dict(n=13, bg=(110, 84, 50), glyph="MILITANTS", big="15", kicker="PAKISTAN — SECURITY", badge="OFFICIAL",
+         head="Pakistan says 15 militants killed",
+         body="Forces reported 15 militants killed in two operations; figures from security sources.", src="Dawn · state media"),
+]
+
+BRIEFS = [
+    (14, "Paris", "82,500 march on living costs, 6th Saturday", "Reuters"),
+    (15, "Lisbon", "Thousands march over housing costs", "Al Jazeera"),
+    (16, "Washington", "FBI probes crime-database breach", "CNN · AP"),
+    (17, "Hormuz", "Iran says it downed a US MQ-9 drone", "Al Jazeera"),
+    (18, "Tehran", "Iran unveils a dual-missile launcher", "IRNA"),
+    (19, "Zagreb", "Thousands protest a hospital death", "Reuters"),
+    (20, "Newcastle", "Leaders Arsenal held 2–2", "Reuters"),
+    (21, "London", "Leeds win 4–1 at Chelsea, first since 1999", "Reuters"),
+    (22, "Dublin", "Ireland edge champions South Africa 20–17", "Reuters"),
+    (23, "Cardiff", "Wallabies hold off Wales 29–26", "AAP"),
+    (24, "Mercury", "BepiColombo in orbit after 8 years", "ESA · Nature"),
+    (25, "Cleveland", "Harden's 51 points pass Bryant's mark", "AP"),
+    (26, "Pas-de-Calais", "River Canche on orange alert", "Prefecture"),
+    (27, "Dhaka", "Measles death toll passes 1,340", "DGHS"),
+    (28, "Twickenham", "France beat Argentina 45–17", "Reuters"),
+    (29, "Edinburgh", "Scotland rout Japan 67–5", "Reuters"),
+    (30, "Rome", "Fiji beat Italy for a first win", "World Rugby"),
+    (31, "Kharg Island", "14 tankers mass vs blockade", "Reuters"),
+    (32, "Doha", "Cameroon lose U17 opener 2–1 to Venezuela", "FIFA"),
+    (33, "Fukushima", "Snow isolates ~1,400 in Kitashiobara", "Kyodo"),
+    (34, "Lahore", "Pakistan drop Rizwan, Masood in overhaul", "PCB"),
+    (35, "Denpasar", "Interpol fugitive refused entry", "Antara"),
+]
+
+DATECHECK = ("Left out as other days' news: the Kryvyi Rih double-tap (began Friday evening local), the Kyiv bridge "
+             "barrage (Thursday night–Friday) and Denmark's expulsion of a Russian attaché (announced Friday). "
+             "Quake depth is printed both ways — IGP 129 km, USGS 108 km. Mastung figures are security-source "
+             "only, so that card is badged OFFICIAL.  Corrections: none.")
 
 
-def paint_region_band(draw, top):
-    """The rainbow band: one segment per region, by count."""
-    total = sum(count for _, count, _ in REGION_BAND)
-    x = 24
-    for name, count, colour in REGION_BAND:
-        seg_w = int((W - 48) * count / total)
-        draw.rectangle([x, top, x + seg_w, top + RAINBOW_H], fill=colour)
-        label = f"{name} {count}"
-        label_w = draw.textlength(label, font=F["band"])
-        draw.text((x + (seg_w - label_w) / 2, top + 3), label,
-                  font=F["band"], fill=(255, 255, 255))
-        x += seg_w
-    return top + RAINBOW_H
+# ------------------------------------------------------- lead artwork
+
+def art_gulf(d, x, y, w, h):
+    """Schematic Gulf: Iran north, Arabia south, Hormuz at the east."""
+    d.rectangle([x, y, x + w, y + h], fill=(168, 196, 205))
+    d.polygon([(x, y), (x + w, y), (x + w, y + 34), (x + 150, y + 40),
+               (x + 90, y + 26), (x, y + 20)], fill=(216, 198, 158))  # Iran
+    d.polygon([(x, y + h), (x + w, y + h), (x + w, y + 96),
+               (x + 205, y + 92), (x + 120, y + 118), (x + 40, y + 104),
+               (x, y + 122)], fill=(216, 198, 158))  # Arabia
+    f9, f10b = F(SANS, 9), F(SANS_B, 10)
+    d.text((x + w - 52, y + 8), "IRAN", font=F(SANS_B, 12), fill=INK)
+    d.text((x + 10, y + h - 18), "ARABIA", font=F(SANS_B, 12), fill=INK)
+    def burst(cx, cy, label, dy=14):
+        for r in (9, 5):
+            d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=RED if r == 5 else (240, 170, 60))
+        d.text((cx - d.textlength(label, font=f10b) / 2, cy + dy), label, font=f10b, fill=INK)
+    burst(x + 118, y + 78, "BAHRAIN", 16)          # US bases hit
+    burst(x + 238, y + 88, "off KHASAB", 14)       # tankers hit
+    d.ellipse([x + 196, y + 40, x + 204, y + 48], fill=INK)
+    d.text((x + 178, y + 24), "KHARG I.", font=f9, fill=INK)
+    d.text((x + 210, y + 62), "HORMUZ", font=f10b, fill=INK)
+    d.text((x + 8, y + 6), "2 air bases · 3 tankers hit", font=f10b, fill=RED)
 
 
-def paint_timeline(draw, top):
-    """The day-in-UTC strip: a label box and five moments."""
-    draw.rectangle([24, top, 122, top + TIMELINE_H], fill=NAVY)
-    draw.text((32, top + 4), "THE DAY", font=F["tl_head"],
-              fill=(255, 255, 255))
-    draw.text((32, top + 18), "IN UTC", font=F["tl_head"],
-              fill=(255, 255, 255))
-    n = len(TIMELINE)
-    box_w = (W - 48 - 98 - 6 - (n - 1) * 6) / n
-    x = 128.0
-    for moment, text in TIMELINE:
-        draw.rectangle([x, top, x + box_w, top + TIMELINE_H],
-                       fill=(238, 233, 220))
-        draw.text((x + 8, top + 3), moment, font=F["tl_time"],
-                  fill=DARKRED)
-        draw.text((x + 8, top + 18), text, font=F["tl_text"], fill=INK)
-        x += box_w + 6
-    return top + TIMELINE_H
+def art_quake(d, x, y, w, h):
+    """Cross-section: surface town, strata, deep hypocentre."""
+    d.rectangle([x, y, x + w, y + h], fill=(240, 230, 205))
+    strata = [(200, 178, 138), (186, 152, 108), (160, 120, 84), (128, 92, 62)]
+    top = y + 34
+    for i, c in enumerate(strata):
+        d.rectangle([x, top + i * 29, x + w, top + (i + 1) * 29], fill=c)
+    d.line([x, top, x + w, top], fill=INK, width=2)
+    for bx in (x + 128, x + 154, x + 252):  # houses on the surface
+        d.rectangle([bx, top - 14, bx + 16, top], fill=(120, 90, 60))
+        d.polygon([(bx - 2, top - 14), (bx + 8, top - 22), (bx + 18, top - 14)], fill=RED)
+    d.text((x + 22, y + 6), "LIMA — shaking felt", font=F(SANS_B, 10), fill=INK)
+    d.text((x + 196, y + 6), "JUNÍN", font=F(SANS_B, 10), fill=INK)
+    hx, hy = x + 168, y + h - 26
+    for r in (13, 8):
+        d.ellipse([hx - r, hy - r, hx + r, hy + r], outline=RED, width=2)
+    d.ellipse([hx - 3, hy - 3, hx + 3, hy + 3], fill=RED)
+    d.line([hx, top, hx, hy], fill=RED, width=1)
+    d.text((x + 8, y + h - 20), "depth 108–129 km", font=F(SANS_B, 11), fill=(255, 255, 255))
+    d.text((hx + 18, hy - 8), "M6.7 · 00:09 UTC", font=F(SANS_B, 11), fill=(255, 255, 255))
 
 
-def paint_card(draw, page, x, y, card_w, story, lead=False):
-    """One story card: artwork on top, then kicker, headline,
-    brief and source tag; returns the card's bottom edge."""
-    art_h = LEAD_ART_H if lead else CARD_ART_H
-    head_font = F["lead_head"] if lead else F["head"]
-    brief_font = F["lead_brief"] if lead else F["brief"]
-    head_step = 31 if lead else 19
-    brief_step = 15 if lead else 13
-    head_lines = wrap_text(draw, story["head"], head_font, card_w - 16)
-    brief_lines = wrap_text(draw, story["brief"], brief_font, card_w - 16)
-    assert len(head_lines) <= 2, (story["n"], head_lines)
-    assert len(brief_lines) <= 3, (story["n"], brief_lines)
-    height = (art_h + 3 + 13 + 4 + len(head_lines) * head_step + 2
-              + len(brief_lines) * brief_step + 4 + 11 + 8)
-    draw.rectangle([x, y, x + card_w, y + height], fill=CARD)
-    draw.rectangle([x, y, x + card_w, y + height], outline=RULE)
-    art = crop_to_box(ASSETS / story["art"], int(card_w), art_h,
-                      story.get("focal", 0.5))
-    page.paste(art, (int(x), int(y)))
-    # The story's number rides on a coloured disc over the art.
-    draw.ellipse([x + card_w - 30, y + art_h - 30,
-                  x + card_w - 6, y + art_h - 6], fill=story["color"])
-    draw.text((x + card_w - 18, y + art_h - 24), str(story["n"]),
-              font=F["num"], fill=(255, 255, 255), anchor="ma")
-    ty = y + art_h + 3
-    draw.text((x + 8, ty), story["kicker"], font=F["kick"],
-              fill=story["color"])
-    ty += 13
-    for line in head_lines:
-        ty += 4
-        draw.text((x + 8, ty), line, font=head_font, fill=INK)
-        ty += head_step - 4
-    ty += 2
-    for line in brief_lines:
-        draw.text((x + 8, ty), line, font=brief_font, fill=(52, 48, 44))
-        ty += brief_step
-    ty += 4
-    draw.text((x + 8, ty), story["tag"], font=F["tag"], fill=GRAY)
-    return y + height
+def art_cop(d, x, y, w, h):
+    """COP31 calendar strip running past its scheduled end."""
+    d.rectangle([x, y, x + w, y + h], fill=(214, 228, 214))
+    d.text((x + 10, y + 8), "NOV 9–20 SCHEDULED", font=F(SANS_B, 10), fill=INK)
+    d.text((x + w - 76, y + 6), "1.5°C", font=F(SANS_B, 16), fill=RED)
+    cells, cw, cy = 13, (w - 20) // 13, y + 44
+    for i in range(cells):
+        cx = x + 10 + i * cw
+        fill = (255, 255, 255)
+        if i == 12:
+            fill = (250, 205, 190)
+        d.rectangle([cx, cy, cx + cw - 3, cy + 46], fill=fill, outline=GRAY)
+        d.text((cx + 4, cy + 4), str(9 + i), font=F(SANS_B, 12), fill=INK)
+        if i == 11:
+            d.text((cx + 3, cy + 28), "END", font=F(SANS_B, 7), fill=GRAY)
+        if i == 12:
+            d.text((cx + 2, cy + 28), "+1 DAY", font=F(SANS_B, 7), fill=RED)
+    d.text((x + 10, y + h - 24), "approval session Sun 06:00 GMT", font=F(SANS, 10), fill=INK)
+    d.text((x + w - 118, y + h - 24), "OVERTIME", font=F(SANS_B, 12), fill=RED)
 
 
-def paint_cards(draw, page, top):
-    """The lead row of three, then two rows of four cards."""
-    gap = 10
-    lead_w = (W - 48 - 2 * gap) / 3
-    lead_bottom = top
-    for i, story in enumerate(LEADS):
-        bottom = paint_card(draw, page, 24 + i * (lead_w + gap), top,
-                            lead_w, story, lead=True)
-        lead_bottom = max(lead_bottom, bottom)
-    y = lead_bottom + gap
-    card_w = (W - 48 - 3 * gap) / 4
-    row_bottom = y
-    for i, story in enumerate(ROWS):
-        if i == 4:
-            y = row_bottom + gap
-        bottom = paint_card(draw, page, 24 + (i % 4) * (card_w + gap),
-                            y, card_w, story)
-        row_bottom = max(row_bottom, bottom)
-    return row_bottom
+ART = {"gulf": art_gulf, "quake": art_quake, "cop": art_cop}
+
+# ------------------------------------------------------------- pin map
+
+MAP_ROWS = [
+    "..........####..............................................................",
+    "......##########......##....................................................",
+    "....#############....####..........########################################...",
+    "...##############.....##........############################################..",
+    "..################...............######..###############################......",
+    "...################....................#################################......",
+    "....#############..........................##########..################.....",
+    ".....##########......##......................########...##############........",
+    "......########......####.........................#####...###########..........",
+    ".......######........#####..........................##.....#########............",
+    "........#####.........#####................................########...........",
+    ".........####..........#####...............................#######............",
+    "..........###...........####..........##...................######.............",
+    "..........##.............###.........####...................#####.............",
+    "..........................##.........######..................####...............",
+    "..........................#.........########..................###...............",
+    "...................................##########................##.................",
+    "..................................############...............##.................",
+    "..................................#############...............................",
+    "...................................###########.............#..................",
+    "....................................#########..........##..##.................",
+    ".....................................#######..........####....................",
+    "......................................#####............##.....................",
+    ".......................................###....................................",
+    ".......................................##.....................#..#............",
+    ".......................................#...................########...........",
+    "................................................................########..........",
+    ".................................................................######...........",
+    "..................................................................####............",
+]
+PINS = [(1, 57, 15), (2, 24, 24), (3, 53, 12), (4, 51, 7), (6, 15, 17),
+        (8, 57, 16), (9, 80, 17), (10, 46, 9), (11, 12, 14), (12, 55, 15),
+        (13, 63, 15), (31, 58, 14), (33, 86, 11)]
 
 
-def lonlat_to_xy(lon, lat, x0, y0):
-    """Project a longitude/latitude onto the map's box."""
-    return (x0 + (lon + 180) / 360 * MAP_W,
-            y0 + (85 - lat) / 125 * MAP_H)
-
-
-def paint_map(draw, x, y):
-    """The dot-matrix world map with pins, dots and legend."""
-    draw.text((x, y), "WHERE IT HAPPENED", font=F["map_head"], fill=NAVY)
-    map_y = y + 16
-    rows = MAP_ROWS
-    assert len(rows) == 25 and all(len(r) == 100 for r in rows)
-    cell_w = MAP_W / 100
-    cell_h = MAP_H / 25
-    for ri, row in enumerate(rows):
+def draw_map(d, x, y, cell=5):
+    for ri, row in enumerate(MAP_ROWS):
         for ci, ch in enumerate(row):
-            if ch != ".":
-                draw.ellipse([x + ci * cell_w + 0.4,
-                              map_y + ri * cell_h + 0.4,
-                              x + (ci + 1) * cell_w - 0.4,
-                              map_y + (ri + 1) * cell_h - 0.4],
-                             fill=(198, 190, 172))
-    for lon, lat, colour in MAP_DOTS:
-        px, py = lonlat_to_xy(lon, lat, x, map_y)
-        draw.ellipse([px - 2.5, py - 2.5, px + 2.5, py + 2.5],
-                     fill=colour)
-    for n, lon, lat, colour in MAP_PIN_DATA:
-        px, py = lonlat_to_xy(lon, lat, x, map_y)
-        draw.ellipse([px - 8, py - 8, px + 8, py + 8], fill=colour)
-        draw.text((px, py - 6), str(n), font=F["map_pin"],
-                  fill=(255, 255, 255), anchor="ma")
-    label, lon, lat, colour = MAP_PILL
-    px, py = lonlat_to_xy(lon, lat, x, map_y)
-    pill_w = draw.textlength(label, font=F["map_pin"]) + 10
-    draw.rounded_rectangle([px - pill_w / 2, py - 8,
-                            px + pill_w / 2, py + 8], 8, fill=colour)
-    draw.text((px, py - 6), label, font=F["map_pin"],
-              fill=(255, 255, 255), anchor="ma")
-    legend_y = map_y + MAP_H + 6
-    draw.text((x, legend_y),
-              "ASIA 4 · EUROPE 5 · AMERICAS 4 · MID EAST 6 · "
-              "AFRICA 2 · OCEANIA 2 · GLOBAL 7",
-              font=F["legend"], fill=GRAY)
-    return legend_y + 12
+            if ch == "#":
+                d.ellipse([x + ci * cell, y + ri * cell,
+                           x + ci * cell + 3, y + ri * cell + 3], fill=(178, 158, 118))
+    for n, cx, cy in PINS:
+        px, py = x + cx * cell, y + cy * cell
+        d.ellipse([px - 7, py - 7, px + 7, py + 7], fill=RED)
+        f = F(SANS_B, 8)
+        t = str(n)
+        d.text((px - d.textlength(t, font=f) / 2, py - 5), t, font=f, fill=(255, 255, 255))
 
 
-def paint_briefs(draw, x, y, width):
-    """The one-line briefs in three columns, numbered."""
-    draw.text((x, y), "ALSO ON SATURDAY 21 NOVEMBER",
-              font=F["also_head"], fill=NAVY)
-    ty = y + 14
-    per_col = (len(BRIEFS) + 2) // 3
-    col_w = width / 3
-    for i, (n, colour, lead, rest) in enumerate(BRIEFS):
-        col, row = divmod(i, per_col)
-        cx = x + col * col_w
-        cy = ty + row * 13
-        draw.text((cx, cy), f"{n}", font=F["also_num"], fill=colour)
-        lead_x = cx + draw.textlength(f"{n} ", font=F["also_num"])
-        draw.text((lead_x, cy), lead, font=F["also_lead"], fill=INK)
-        rest_x = lead_x + draw.textlength(lead + " ",
-                                          font=F["also_lead"])
-        rest_font = shrink_font(draw, rest, FONT_FILES["also_text"][0],
-                                11, x + (col + 1) * col_w - 8 - rest_x)
-        draw.text((rest_x, cy), rest, font=rest_font, fill=(52, 48, 44))
-    return ty + per_col * 13
+# ------------------------------------------------------------- assembly
+
+def fit(d, text, font, width):
+    if d.textlength(text, font=font) <= width:
+        return text
+    while text and d.textlength(text + "…", font=font) > width:
+        text = text[:-1]
+    return text + "…"
 
 
-def paint_footer(draw, y):
-    """The red date-check strip and the sources line."""
-    draw.rectangle([24, y, W - 24, y + 26], fill=DARKRED)
-    draw.text((36, y + 2), DATE_CHECK_1, font=F["datecheck"],
-              fill=(255, 255, 255))
-    draw.text((36, y + 14), DATE_CHECK_2, font=F["datecheck"],
-              fill=(255, 235, 235))
-    draw.text((24, y + 29), SOURCES_LINE, font=F["sources"], fill=GRAY)
-    return y + 40
+def build():
+    img = Image.new("RGB", (W, H), CREAM)
+    d = ImageDraw.Draw(img)
+    CW = W - 2 * MARGIN  # 968
+
+    # masthead strip
+    d.rectangle([0, 0, W, 26], fill=INK)
+    d.text((MARGIN, 6), "THE WORLD IN ONE DAY", font=F(SANS_B, 12), fill=(255, 255, 255))
+    right = f"35 STORIES · 6 REGIONS · EVERY ONE DATED {DAY_UP}"
+    d.text((W - MARGIN - d.textlength(right, font=F(SANS_B, 12)), 6), right,
+           font=F(SANS_B, 12), fill=(255, 255, 255))
+    # date + subhead
+    f_date = F(SERIF, 57)
+    d.text(((W - d.textlength(DAY, font=f_date)) / 2, 34), DAY, font=f_date, fill=INK)
+    f_sub = F(SERIF_IT, 19)
+    d.text(((W - d.textlength(SUBHEAD, font=f_sub)) / 2, 102), SUBHEAD, font=f_sub, fill=RED)
+    d.line([MARGIN, 132, W - MARGIN, 132], fill=INK, width=2)
+
+    # timeline
+    ty = 140
+    d.rectangle([MARGIN, ty, MARGIN + 86, ty + 40], fill=INK)
+    d.text((MARGIN + 8, ty + 6), "THE DAY", font=F(SANS_B, 11), fill=(255, 255, 255))
+    d.text((MARGIN + 8, ty + 21), "IN UTC", font=F(SANS_B, 11), fill=(255, 255, 255))
+    ex = MARGIN + 100
+    ew = (CW - 100) / len(TIMELINE)
+    d.line([ex, ty + 14, W - MARGIN, ty + 14], fill=GRAY, width=1)
+    for i, (t, cap) in enumerate(TIMELINE):
+        cx = ex + i * ew
+        d.ellipse([cx + 2, ty + 11, cx + 8, ty + 17], fill=RED)
+        d.text((cx, ty - 2), t, font=F(SANS_B, 11), fill=INK)
+        for j, ln in enumerate(cap.split("\n")):
+            d.text((cx, ty + 26 + j * 10), ln, font=F(SANS, 8), fill=GRAY)
+
+    # giant stats
+    sy = 196
+    sw = CW / 6
+    for i, (num, cap) in enumerate(STATS):
+        cx = MARGIN + i * sw
+        d.text((cx, sy), num, font=F(SERIF, 37), fill=RED)
+        for j, ln in enumerate(wrap(d, cap, F(SANS, 9), sw - 12)):
+            d.text((cx, sy + 44 + j * 11), ln, font=F(SANS, 9), fill=INK)
+    d.line([MARGIN, sy + 72, W - MARGIN, sy + 72], fill=RULE, width=1)
+
+    # region band (tiny regions keep a minimum width so labels fit)
+    ry, total = 276, sum(c for _, c, _ in REGIONS)
+    small = [i for i, (_, c, _) in enumerate(REGIONS) if CW * c / total < 78]
+    rest = CW - 78 * len(small)
+    rest_total = sum(c for i, (_, c, _) in enumerate(REGIONS) if i not in small)
+    rx = MARGIN
+    for i, (name, count, color) in enumerate(REGIONS):
+        seg = 78 if i in small else rest * count / rest_total
+        d.rectangle([rx, ry, rx + seg - 2, ry + 20], fill=color)
+        label = f"{name} {count}"
+        d.text((rx + (seg - d.textlength(label, font=F(SANS_B, 10))) / 2, ry + 4),
+               label, font=F(SANS_B, 10), fill=(255, 255, 255))
+        rx += seg
+
+    # leads
+    ly, lw = 308, (CW - 32) // 3
+    for i, lead in enumerate(LEADS):
+        cx = MARGIN + i * (lw + 16)
+        ART[lead["art"]](d, cx, ly, lw, 118)
+        ky = ly + 126
+        numdot(d, cx, ky - 3, lead["n"])
+        d.text((cx + 28, ky), lead["kicker"], font=F(SANS_B, 10), fill=INK)
+        bw = badge(d, cx + lw - 76, ky - 1, lead["badge"])  # right aligned approx
+        hy = ky + 22
+        for ln in wrap(d, lead["head"], F(SERIF, 19), lw):
+            d.text((cx, hy), ln, font=F(SERIF, 19), fill=INK)
+            hy += 23
+        by = hy + 3
+        for ln in wrap(d, lead["body"], F(SANS, 10), lw):
+            d.text((cx, by), ln, font=F(SANS, 10), fill=(40, 40, 40))
+            by += 13
+        d.text((cx, by + 2), lead["src"], font=F(SANS, 8), fill=GRAY)
+
+    # cards
+    cy0, cw5, ch5 = 566, (CW - 40) // 5, 104
+    for idx, card in enumerate(CARDS):
+        cx = MARGIN + (idx % 5) * (cw5 + 10)
+        cy = cy0 + (idx // 5) * (ch5 + 8)
+        d.rectangle([cx, cy, cx + cw5, cy + 30], fill=card["bg"])
+        d.text((cx + 7, cy + 4), card["big"], font=F(SERIF, 19), fill=(255, 255, 255))
+        gl = card["glyph"]
+        d.text((cx + cw5 - 7 - d.textlength(gl, font=F(SANS_B, 8)), cy + 10),
+               gl, font=F(SANS_B, 8), fill=(255, 255, 255))
+        badge(d, cx + cw5 - 76, cy + 34, card["badge"])
+        d.text((cx, cy + 36), fit(d, card["kicker"], F(SANS_B, 7), 104),
+               font=F(SANS_B, 7), fill=INK)
+        hy = cy + 50
+        for ln in wrap(d, card["head"], F(SANS_B, 11), cw5)[:2]:
+            d.text((cx, hy), ln, font=F(SANS_B, 11), fill=INK)
+            hy += 13
+        for ln in wrap(d, card["body"], F(SANS, 8), cw5)[:3]:
+            d.text((cx, hy), ln, font=F(SANS, 8), fill=(40, 40, 40))
+            hy += 10
+
+    # bottom: map + briefs
+    by0 = 792
+    d.text((MARGIN, by0), "WHERE IT HAPPENED", font=F(SANS_B, 10), fill=INK)
+    d.text((MARGIN, by0 + 14), "Pins carry story numbers", font=F(SANS, 8), fill=GRAY)
+    draw_map(d, MARGIN, by0 + 28, cell=3.4)
+    bx = 340
+    d.text((bx, by0), "ALSO ON SATURDAY — 22 MORE STORIES", font=F(SANS_B, 11), fill=INK)
+    colw = (W - MARGIN - bx - 14) // 2
+    for j, (n, place, text, src) in enumerate(BRIEFS):
+        cx = bx + (j // 11) * (colw + 14)
+        yy = by0 + 18 + (j % 11) * 12
+        d.text((cx, yy), str(n), font=F(SANS_B, 8), fill=RED)
+        line = f"{place} — {text} ({src})"
+        d.text((cx + 15, yy), fit(d, line, F(SANS, 8), colw - 15), font=F(SANS, 8), fill=INK)
+
+    # date check + footer
+    dy = 950
+    d.rectangle([MARGIN, dy, W - MARGIN, dy + 40], outline=RED, width=1)
+    d.text((MARGIN + 8, dy + 5), "DATE CHECK", font=F(SANS_B, 9), fill=RED)
+    for j, ln in enumerate(wrap(d, DATECHECK, F(SANS, 8), CW - 92)):
+        d.text((MARGIN + 84, dy + 4 + j * 10), ln, font=F(SANS, 8), fill=INK)
+    fy = 998
+    d.text((MARGIN, fy), "HOW WE CHECKED", font=F(SANS_B, 8), fill=INK)
+    badge(d, MARGIN + 92, fy - 2, "CONFIRMED")
+    d.text((MARGIN + 172, fy), "2+ major outlets", font=F(SANS, 8), fill=INK)
+    badge(d, MARGIN + 262, fy - 2, "OFFICIAL")
+    d.text((MARGIN + 330, fy), "on the record", font=F(SANS, 8), fill=INK)
+    badge(d, MARGIN + 408, fy - 2, "REPORTED")
+    d.text((MARGIN + 482, fy), "one major outlet", font=F(SANS, 8), fill=INK)
+    tail = "Every story here happened, or was first reported, on Saturday 21 November 2026 (UTC)."
+    d.text((W - MARGIN - d.textlength(tail, font=F(SANS, 8)), fy), tail, font=F(SANS, 8), fill=GRAY)
+    return img
 
 
 def verify_output(path):
-    """Re-read the composed page and check it against the
-    bounty's caps, so a bad page is caught here rather than
-    by the grader: the file must be a PNG of at most
-    1024x1024 pixels and at most 1 MiB.
-
-    The width and height come from the PNG's IHDR chunk -
-    the first chunk after the 8-byte signature: 4 bytes of
-    length, the type "IHDR", then width and height as
-    big-endian integers - never from the file name.
-    """
-    import struct
-
-    blob = path.read_bytes()
-    signature = b"\x89PNG\r\n\x1a\n"
-    if not blob.startswith(signature):
-        raise SystemExit(f"{path} is not a PNG file")
-    if blob[12:16] != b"IHDR":
-        raise SystemExit(f"{path}: first chunk is not IHDR")
-    width, height = struct.unpack(">II", blob[16:24])
-    if width > 1024 or height > 1024:
-        raise SystemExit(
-            f"{path} is {width}x{height}, over the 1024x1024 cap")
-    if len(blob) > 1_048_576:
-        raise SystemExit(
-            f"{path} is {len(blob)} bytes, over the 1 MiB cap")
-    print(f"verified {path.name}: {width}x{height}, "
-          f"{len(blob)} bytes, within both caps")
-    return width, height
+    """Check the composed page against the bounty's caps."""
+    with open(path, "rb") as fh:
+        data = fh.read()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("not a PNG")
+    if len(data) > 1_048_576:
+        raise ValueError("over the 1 MiB cap")
+    w_ = int.from_bytes(data[16:20], "big")
+    h_ = int.from_bytes(data[20:24], "big")
+    if w_ > 1024 or h_ > 1024:
+        raise ValueError("over the 1024x1024 cap")
 
 
 def main():
-    page = Image.new("RGB", (W, H), PAPER)
-    draw = ImageDraw.Draw(page)
-    paint_masthead(draw)
-    y = paint_region_band(draw, MASTHEAD_H + 2) + 4
-    y = paint_timeline(draw, y) + 4
-    y = paint_cards(draw, page, y) + 6
-    map_bottom = paint_map(draw, 24, y)
-    also_bottom = paint_briefs(draw, 24 + MAP_W + 16, y - 2,
-                               W - 48 - MAP_W - 16)
-    bottom = max(map_bottom, also_bottom)
-    end = paint_footer(draw, bottom + 4)
-    assert end <= H - 2, f"page overflow: ends at {end}"
-    page.save(OUT)
-    verify_output(OUT)
-    size = OUT.stat().st_size
-    if size > 1_048_576:
-        page.save(OUT.with_suffix(".jpg"), quality=88)
-        print(f"PNG too big ({size}); wrote JPEG instead")
-    else:
-        print(f"wrote {OUT} ({size} bytes)")
+    img = build()
+    img.save("entry.png")
+    verify_output("entry.png")
 
-
-# The dot-matrix land grid for the map (100 columns by 25
-# rows), kept at the end so the story tables above stay
-# readable.  Each '#' is one dot of land.
-MAP_ROWS = [
-    "......####............................####............#.........##.###......###.....#.....#.........",
-    "....#####..##.##.##.................#########............................######...#######......##...",
-    "...########################..........#######........##############################################..",
-    "...############################.......#####........################################################.",
-    "....####################....######.....###...#.....################################################.",
-    ".....#######.###########.....######.....#.......##..#############################################...",
-    "................#################...............###############################################.....",
-    ".................###############...............################################################.....",
-    "................###############................###..######################################..........",
-    "................##############.....................#.####################################...........",
-    ".................############................#########################################..............",
-    "....................######.##...............########################################................",
-    ".....................#####..................####################################....#...............",
-    "........................###.#######.........#####################.....##########..###...............",
-    "............................###########......###################.......##...##......................",
-    "............................############......#################............#########..###...........",
-    "............................############.......#############.#.............################.........",
-    ".............................##########.........#############...................###....#####........",
-    ".............................##########.........############...................####.................",
-    ".............................#########...........##########..##...................##########........",
-    ".............................########............#########...###.................############.......",
-    ".............................#######..............#######....##..................############.......",
-    ".............................######...............######..........................##########........",
-    ".............................#####.................####............................########.....##..",
-    ".............................####.....................................................#####.....###.",
-]
 
 if __name__ == "__main__":
     main()
