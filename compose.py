@@ -93,19 +93,19 @@ TIMELINE = [("00:09", "Peru quake\nJunín (USGS)"), ("03:00", "Hartha fire\nBasr
             ("14:10", "England v NZ\nkickoff"), ("EVE", "Iran's waves\non Bahrain")]
 
 LEADS = [
-    dict(n=1, art="gulf", kicker="BAHRAIN · HORMUZ — WAR", badge="CONFIRMED",
+    dict(n=1, art="assets/illo-gulf.png", kicker="BAHRAIN · HORMUZ — WAR", badge="CONFIRMED",
          head="Iran strikes US bases in Bahrain; tankers hit off Oman",
          body="Two waves of drones and missiles hit US bases; a civilian "
               "plant burned. Three tankers struck in or near Hormuz; "
               "Iranian tankers mass off Kharg Island.",
          src="Reuters · Al Jazeera · euronews"),
-    dict(n=2, art="quake", kicker="JUNÍN, PERU — EARTHQUAKE", badge="CONFIRMED",
+    dict(n=2, art="assets/illo-peru.png", kicker="JUNÍN, PERU — EARTHQUAKE", badge="CONFIRMED",
          head="Deep 6.7 earthquake shakes central Peru",
          body="Struck 00:09 UTC, deep below Junín; felt in Lima. "
               "Landslides and minor damage, no deaths in first reports; "
               "no tsunami threat.",
          src="IGP · USGS · AFP"),
-    dict(n=3, art="cop", kicker="ANTALYA, TÜRKIYE — CLIMATE", badge="CONFIRMED",
+    dict(n=3, art="assets/illo-cop31.png", kicker="ANTALYA, TÜRKIYE — CLIMATE", badge="CONFIRMED",
          head="COP31 climate talks run into overtime",
          body="Talks ran through Saturday over fossil fuels and finance; "
               "the draft still omits fossil fuels and a third draft was "
@@ -247,6 +247,19 @@ def art_cop(d, x, y, w, h):
 
 ART = {"gulf": art_gulf, "quake": art_quake, "cop": art_cop}
 
+
+def cover(img, path, x, y, w, h):
+    """Paste a detailed cover illustration, centre-cropped to fill."""
+    art = Image.open(path).convert("RGB")
+    scale = max(w / art.width, h / art.height)
+    art = art.resize((round(art.width * scale), round(art.height * scale)),
+                     Image.LANCZOS)
+    left = (art.width - w) // 2
+    top = (art.height - h) // 2
+    img.paste(art.crop((left, top, left + w, top + h)), (x, y))
+    d = ImageDraw.Draw(img)
+    d.rectangle([x, y, x + w - 1, y + h - 1], outline=(120, 110, 95))
+
 # ------------------------------------------------------------- pin map
 
 MAP_ROWS = [
@@ -370,7 +383,10 @@ def build():
     ly, lw = 308, (CW - 32) // 3
     for i, lead in enumerate(LEADS):
         cx = MARGIN + i * (lw + 16)
-        ART[lead["art"]](d, cx, ly, lw, 118)
+        if lead["art"].endswith(".png"):
+            cover(img, lead["art"], cx, ly, lw, 118)
+        else:
+            ART[lead["art"]](d, cx, ly, lw, 118)
         ky = ly + 126
         numdot(d, cx, ky - 3, lead["n"])
         d.text((cx + 28, ky), lead["kicker"], font=F(SANS_B, 10), fill=INK)
