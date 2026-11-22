@@ -116,22 +116,22 @@ LEADS = [
 CARDS = [
     dict(n=4, bg=(38, 60, 92), glyph="CREW OFF", big="16", kicker="FINLAND — SECURITY", badge="CONFIRMED",
          head="Drones set Russian cargo ship ablaze",
-         body="Sparta II caught fire after a drone hit; 16 crew got off. Finland suspects Ukraine.", src="Reuters"),
+         body="Sparta II caught fire after a drone hit; 16 crew got off safely.", src="Reuters"),
     dict(n=5, bg=(70, 90, 120), glyph="ROBOT ARMS", big="128", kicker="GENEVA — ARMS", badge="CONFIRMED",
          head="128 states back a killer-robots draft",
-         body="States agreed to draft a binding instrument over two years; big powers opposed.", src="AFP"),
+         body="States agreed to draft a binding instrument over two years.", src="AFP"),
     dict(n=6, bg=(150, 40, 30), glyph="FBI TOP TEN", big="$5M", kicker="MEXICO — CRIME", badge="CONFIRMED",
          head="Cartel boss Chapo Isidro captured",
-         body="The FBI most-wanted trafficker was seized in Guasave; 11 died in follow-on violence.", src="Reuters · CNN"),
+         body="The FBI most-wanted trafficker was seized; 11 died in follow-on violence.", src="Reuters · CNN"),
     dict(n=7, bg=(36, 80, 122), glyph="TRADE PACT", big="90.4%", kicker="EU–INDONESIA — TRADE", badge="OFFICIAL",
          head="EU and Indonesia sign trade pact",
-         body="Signed after ten years of talks; 90.4% of tariff lines duty-free from day one.", src="Antara · governments"),
+         body="Signed after ten years of talks; 90.4% of tariff lines freed day one.", src="Antara · governments"),
     dict(n=8, bg=(120, 60, 30), glyph="POWER PLANT", big="4", kicker="BASRA, IRAQ — DISASTER", badge="CONFIRMED",
          head="Fire at Hartha power plant kills 4",
          body="The 800 MW plant caught fire before dawn; more than 30 workers were injured.", src="Reuters"),
     dict(n=9, bg=(60, 60, 60), glyph="MARKETS", big="150%", kicker="TAIPEI — MARKETS", badge="OFFICIAL",
          head="Taiwan curbs short selling after rout",
-         body="Regulator banned short sales and raised margin to 150% after the worst week since 1991.", src="FSC via CNA · Reuters"),
+         body="Short sales banned, margin raised to 150% after the worst week since 1991.", src="FSC via CNA · Reuters"),
     dict(n=10, bg=(30, 100, 60), glyph="RUGBY", big="37–12", kicker="TWICKENHAM — RUGBY", badge="CONFIRMED",
          head="England beat All Blacks by record 37–12",
          body="Five tries and a record margin: New Zealand's heaviest defeat by England.", src="Reuters · AP"),
@@ -143,8 +143,14 @@ CARDS = [
          body="The vehicle carried food and WCK-logo papers; WCK said it was not theirs.", src="Reuters"),
     dict(n=13, bg=(110, 84, 50), glyph="MILITANTS", big="15", kicker="PAKISTAN — SECURITY", badge="OFFICIAL",
          head="Pakistan says 15 militants killed",
-         body="Forces reported 15 militants killed in two operations; figures from security sources.", src="Dawn · state media"),
+         body="15 militants killed in two operations; figures from security sources.", src="Dawn · state media"),
 ]
+
+CARD_ART = {4: "assets/illo-card-ship.png", 5: "assets/illo-robots.png",
+            6: "assets/illo-mexico.png", 7: "assets/illo-card-trade.png",
+            8: "assets/illo-card-plant.png", 9: "assets/illo-markets.png",
+            10: "assets/illo-card-rugby.png", 11: "assets/illo-card-f1.png",
+            12: "assets/illo-gaza.png", 13: "assets/illo-card-mastung.png"}
 
 BRIEFS = [
     (14, "Paris", "82,500 march on living costs, 6th Saturday", "Reuters"),
@@ -402,24 +408,30 @@ def build():
             by += 13
         d.text((cx, by + 2), lead["src"], font=F(SANS, 8), fill=GRAY)
 
-    # cards
+    # cards — every one illustrated with a detailed cover image
     cy0, cw5, ch5 = 566, (CW - 40) // 5, 104
     for idx, card in enumerate(CARDS):
         cx = MARGIN + (idx % 5) * (cw5 + 10)
         cy = cy0 + (idx // 5) * (ch5 + 8)
-        d.rectangle([cx, cy, cx + cw5, cy + 30], fill=card["bg"])
-        d.text((cx + 7, cy + 4), card["big"], font=F(SERIF, 19), fill=(255, 255, 255))
-        gl = card["glyph"]
-        d.text((cx + cw5 - 7 - d.textlength(gl, font=F(SANS_B, 8)), cy + 10),
-               gl, font=F(SANS_B, 8), fill=(255, 255, 255))
-        badge(d, cx + cw5 - 76, cy + 34, card["badge"])
-        d.text((cx, cy + 36), fit(d, card["kicker"], F(SANS_B, 7), 104),
+        if card.get("art") or CARD_ART.get(card["n"]):
+            cover(img, card.get("art") or CARD_ART[card["n"]], cx, cy, cw5, 44)
+            badge(d, cx + cw5 - 76, cy + 4, card["badge"])
+            ky, kw_ = cy + 48, cw5
+        else:
+            d.rectangle([cx, cy, cx + cw5, cy + 30], fill=card["bg"])
+            d.text((cx + 7, cy + 4), card["big"], font=F(SERIF, 19), fill=(255, 255, 255))
+            gl = card["glyph"]
+            d.text((cx + cw5 - 7 - d.textlength(gl, font=F(SANS_B, 8)), cy + 10),
+                   gl, font=F(SANS_B, 8), fill=(255, 255, 255))
+            badge(d, cx + cw5 - 76, cy + 34, card["badge"])
+            ky, kw_ = cy + 36, 104
+        d.text((cx, ky), fit(d, card["kicker"], F(SANS_B, 7), kw_),
                font=F(SANS_B, 7), fill=INK)
-        hy = cy + 50
+        hy = ky + 14
         for ln in wrap(d, card["head"], F(SANS_B, 11), cw5)[:2]:
             d.text((cx, hy), ln, font=F(SANS_B, 11), fill=INK)
-            hy += 13
-        for ln in wrap(d, card["body"], F(SANS, 8), cw5)[:3]:
+            hy += 12
+        for ln in wrap(d, card["body"], F(SANS, 8), cw5)[:2]:
             d.text((cx, hy), ln, font=F(SANS, 8), fill=(40, 40, 40))
             hy += 10
 
